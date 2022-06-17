@@ -1,0 +1,68 @@
+version: '3.1'
+
+services:
+  db:
+    image: "postgres:alpine"
+    environment:
+      - POSTGRES_USER={{project_name}}
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB={{project_name}}
+    ports:
+      - "5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data:delegated
+
+  broker:
+    image: "rabbitmq:alpine"
+
+  result:
+    image: "redis:alpine"
+
+  frontend:
+    build:
+      dockerfile: frontend/Dockerfile
+      context: .
+    volumes:
+      - .:/app/
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+
+  backend:
+    build:
+      dockerfile: backend/Dockerfile
+      context: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/home/user/app/
+    env_file: backend/.env
+    depends_on:
+      - db
+      - broker
+      - result
+      - frontend
+
+  celery:
+    build:
+      dockerfile: backend/Dockerfile
+      context: .
+    command: python manage.py celery
+    volumes:
+      - ./backend/:/home/user/app/
+    env_file: backend/.env
+    depends_on:
+      - db
+      - broker
+      - result
+
+  mailhog: # service for faking a SMTP server
+    image: mailhog/mailhog
+    ports:
+      - '1025:1025' # smtp server
+      - '8025:8025' # web ui
+
+volumes:
+  dbdata:
+    external:
+      name: {{project_name}}_dbdata
